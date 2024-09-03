@@ -1,5 +1,7 @@
 ﻿using ChatApp.Api.Models;
+using ChatApp.Api.Hubs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace ChatApp.Api.Controllers
@@ -9,10 +11,12 @@ namespace ChatApp.Api.Controllers
     public class ChatController : ControllerBase
     {
         private readonly ChatDbContext _context;
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        public ChatController(ChatDbContext context)
+        public ChatController(ChatDbContext context, IHubContext<ChatHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         [HttpGet]
@@ -36,6 +40,10 @@ namespace ChatApp.Api.Controllers
         {
             _context.Messages.Add(message);
             await _context.SaveChangesAsync();
+
+            // Broadcast the message to all clients
+            await _hubContext.Clients.All.SendAsync("ReceiveMessage", message.Sender, message.Content);
+
             return CreatedAtAction(nameof(GetMessage), new { id = message.Id }, message);
         }
 
