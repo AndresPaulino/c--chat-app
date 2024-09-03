@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using ChatApp.Api.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatApp.Api.Controllers
 {
@@ -6,39 +8,46 @@ namespace ChatApp.Api.Controllers
     [Route("api/[controller]")]
     public class ChatController : ControllerBase
     {
-        [HttpGet]
-        public IActionResult Get()
+        private readonly ChatDbContext _context;
+
+        public ChatController(ChatDbContext context)
         {
-            return Ok("Chat API is working!");
+            _context = context;
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAllMessages()
+        {
+            var messages = await _context.Messages.ToListAsync();
+            return Ok(messages);
         }
 
         [HttpGet("{id}")]
-        public IActionResult GetById(int id)
+        public async Task<IActionResult> GetMessage(int id)
         {
-            // Simulating fetching a chat by id
-            if (id <= 0)
-            {
-                return BadRequest("Invalid chat ID");
-            }
-            return Ok($"Details for chat {id}");
+            var message = await _context.Messages.FindAsync(id);
+            if (message == null)
+                return NotFound();
+            return Ok(message);
         }
 
         [HttpPost]
-        public IActionResult Create([FromBody] string message)
+        public async Task<IActionResult> SendMessage([FromBody] ChatMessage message)
         {
-            if (string.IsNullOrEmpty(message))
-            {
-                return BadRequest("Message cannot be empty");
-            }
-            // Simulating chat creation
-            return CreatedAtAction(nameof(GetById), new { id = 1 }, $"Created chat with message: {message}");
+            _context.Messages.Add(message);
+            await _context.SaveChangesAsync();
+            return CreatedAtAction(nameof(GetMessage), new { id = message.Id }, message);
         }
 
-        [HttpGet("recent")]
-        public IActionResult GetRecent()
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteMessage(int id)
         {
-            // This will respond to GET api/chat/recent
-            return Ok("Recent chats");
+            var message = await _context.Messages.FindAsync(id);
+            if (message == null)
+                return NotFound();
+            _context.Messages.Remove(message);
+            await _context.SaveChangesAsync();
+            return NoContent();
         }
     }
 }
