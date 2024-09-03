@@ -1,0 +1,101 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Application</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #messagesList {
+            height: 300px;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+
+        #messageForm {
+            display: flex;
+        }
+
+        #messageInput {
+            flex-grow: 1;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="messagesList"></div>
+    <form id="messageForm">
+        <input type="text" id="userInput" placeholder="Your name" required>
+        <input type="text" id="messageInput" placeholder="Type a message" required>
+        <button type="submit">Send</button>
+    </form>
+
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/chatHub")
+            .configureLogging(signalR.LogLevel.Information)
+            .build();
+
+        async function start() {
+            try {
+                await connection.start();
+                console.log("SignalR Connected.");
+            } catch (err) {
+                console.log(err);
+                setTimeout(start, 5000);
+            }
+        };
+
+        connection.onclose(async () => {
+            await start();
+        });
+
+        // Start the connection.
+        start();
+
+        connection.on("ReceiveMessage", (user, message) => {
+            const li = document.createElement("li");
+            li.textContent = `${user}: ${message}`;
+            document.getElementById("messagesList").appendChild(li);
+        });
+
+        document.getElementById("messageForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const user = document.getElementById("userInput").value;
+            const message = document.getElementById("messageInput").value;
+            try {
+                await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ sender: user, content: message })
+                });
+                document.getElementById("messageInput").value = "";
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        // Load existing messages when the page loads
+        fetch('/api/chat')
+            .then(response => response.json())
+            .then(messages => {
+                const messagesList = document.getElementById("messagesList");
+                messages.forEach(msg => {
+                    const li = document.createElement("li");
+                    li.textContent = `${msg.sender}: ${msg.content}`;
+                    messagesList.appendChild(li);
+                });
+            });
+    </script>
+</body>
+</html>

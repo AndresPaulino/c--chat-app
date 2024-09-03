@@ -27,6 +27,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
+
+// Serve static files and set default page
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapControllers();
 
 // Map SignalR hub
