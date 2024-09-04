@@ -3,9 +3,11 @@ using ChatApp.Api.Hubs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ChatApp.Api.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class ChatController : ControllerBase
@@ -38,10 +40,10 @@ namespace ChatApp.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> SendMessage([FromBody] ChatMessage message)
         {
+            message.Sender = User.Identity.Name;
             _context.Messages.Add(message);
             await _context.SaveChangesAsync();
 
-            // Broadcast the message to all clients
             await _hubContext.Clients.All.SendAsync("ReceiveMessage", message.Sender, message.Content);
 
             return CreatedAtAction(nameof(GetMessage), new { id = message.Id }, message);
@@ -53,6 +55,8 @@ namespace ChatApp.Api.Controllers
             var message = await _context.Messages.FindAsync(id);
             if (message == null)
                 return NotFound();
+            if (message.Sender != User.Identity.Name)
+                return Forbid();
             _context.Messages.Remove(message);
             await _context.SaveChangesAsync();
             return NoContent();

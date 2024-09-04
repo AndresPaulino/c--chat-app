@@ -1,10 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatApp.Api.Models
 {
-    public class ChatDbContext : DbContext
+    public class ChatDbContext : IdentityDbContext
     {
         public ChatDbContext(DbContextOptions<ChatDbContext> options) : base(options) { }
 
@@ -13,11 +12,8 @@ namespace ChatApp.Api.Models
 
     public class ChatMessage
     {
-        [Key]
         public int Id { get; set; }
-        [Required]
         public string Sender { get; set; }
-        [Required]
         public string Content { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     }
