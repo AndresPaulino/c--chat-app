@@ -4,98 +4,173 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Application</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-        }
-
-        #messagesList {
-            height: 300px;
-            overflow-y: scroll;
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin-bottom: 20px;
-        }
-
-        #messageForm {
-            display: flex;
-        }
-
-        #messageInput {
-            flex-grow: 1;
-            margin-right: 10px;
-        }
-    </style>
 </head>
-<body>
-    <div id="messagesList"></div>
-    <form id="messageForm">
-        <input type="text" id="userInput" placeholder="Your name" required>
-        <input type="text" id="messageInput" placeholder="Type a message" required>
-        <button type="submit">Send</button>
-    </form>
+<body class="bg-gray-100 h-screen flex items-center justify-center">
+    <div class="w-full max-w-md bg-white rounded-lg shadow-md p-6">
+        <div id="authContainer" class="space-y-4">
+            <h2 class="text-2xl font-bold text-center">Chat Login</h2>
+            <input type="text" id="username" placeholder="Username" class="w-full px-3 py-2 border rounded-md">
+            <input type="password" id="password" placeholder="Password" class="w-full px-3 py-2 border rounded-md">
+            <button id="loginBtn" class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600">Login</button>
+            <button id="registerBtn" class="w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600">Register</button>
+        </div>
+        <div id="chatContainer" class="hidden space-y-4">
+            <h2 class="text-2xl font-bold text-center">Chat Room</h2>
+            <div id="messagesList" class="h-64 overflow-y-auto border p-2 rounded-md"></div>
+            <form id="messageForm" class="flex space-x-2">
+                <input type="text" id="messageInput" placeholder="Type a message" class="flex-grow px-3 py-2 border rounded-md">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600">Send</button>
+            </form>
+            <button id="logoutBtn" class="w-full bg-red-500 text-white py-2 rounded-md hover:bg-red-600">Logout</button>
+        </div>
+    </div>
 
     <script>
-        const connection = new signalR.HubConnectionBuilder()
-            .withUrl("/chatHub")
-            .configureLogging(signalR.LogLevel.Information)
-            .build();
+        let token = localStorage.getItem('token');
+        const authContainer = document.getElementById('authContainer');
+        const chatContainer = document.getElementById('chatContainer');
+        const messagesList = document.getElementById('messagesList');
+        const messageForm = document.getElementById('messageForm');
+        const messageInput = document.getElementById('messageInput');
+        const loginBtn = document.getElementById('loginBtn');
+        const registerBtn = document.getElementById('registerBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
 
-        async function start() {
+        function showChat() {
+            authContainer.classList.add('hidden');
+            chatContainer.classList.remove('hidden');
+        }
+
+        function showAuth() {
+            authContainer.classList.remove('hidden');
+            chatContainer.classList.add('hidden');
+        }
+
+        if (token) {
+            showChat();
+        }
+
+        loginBtn.addEventListener('click', async () => {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    localStorage.setItem('token', data.token);
+                    showChat();
+                    startSignalRConnection();
+                } else {
+                    alert('Login failed');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+            }
+        });
+
+        registerBtn.addEventListener('click', async () => {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email: `${username}@example.com`, password })
+                });
+                if (response.ok) {
+                    alert('Registration successful. Please login.');
+                } else {
+                    alert('Registration failed');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('token');
+            showAuth();
+            if (connection && connection.state === signalR.HubConnectionState.Connected) {
+                connection.stop();
+            }
+        });
+
+        let connection;
+
+        async function startSignalRConnection() {
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl("/chatHub", { accessTokenFactory: () => localStorage.getItem('token') })
+                .configureLogging(signalR.LogLevel.Information)
+                .build();
+
+            connection.on("ReceiveMessage", (user, message) => {
+                const messageElement = document.createElement("div");
+                messageElement.textContent = `${user}: ${message}`;
+                messageElement.className = "mb-2";
+                messagesList.appendChild(messageElement);
+                messagesList.scrollTop = messagesList.scrollHeight;
+            });
+
             try {
                 await connection.start();
                 console.log("SignalR Connected.");
+                loadExistingMessages();
             } catch (err) {
                 console.log(err);
-                setTimeout(start, 5000);
+                setTimeout(startSignalRConnection, 5000);
             }
-        };
+        }
 
-        connection.onclose(async () => {
-            await start();
-        });
-
-        // Start the connection.
-        start();
-
-        connection.on("ReceiveMessage", (user, message) => {
-            const li = document.createElement("li");
-            li.textContent = `${user}: ${message}`;
-            document.getElementById("messagesList").appendChild(li);
-        });
-
-        document.getElementById("messageForm").addEventListener("submit", async (event) => {
+        messageForm.addEventListener("submit", async (event) => {
             event.preventDefault();
-            const user = document.getElementById("userInput").value;
-            const message = document.getElementById("messageInput").value;
+            if (!messageInput.value) {
+                return;
+            }
             try {
                 await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
                     },
-                    body: JSON.stringify({ sender: user, content: message })
+                    body: JSON.stringify({ content: messageInput.value })
                 });
-                document.getElementById("messageInput").value = "";
+                messageInput.value = "";
             } catch (err) {
                 console.error(err);
             }
         });
 
-        // Load existing messages when the page loads
-        fetch('/api/chat')
-            .then(response => response.json())
-            .then(messages => {
-                const messagesList = document.getElementById("messagesList");
-                messages.forEach(msg => {
-                    const li = document.createElement("li");
-                    li.textContent = `${msg.sender}: ${msg.content}`;
-                    messagesList.appendChild(li);
+        async function loadExistingMessages() {
+            try {
+                const response = await fetch('/api/chat', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
                 });
-            });
+                const messages = await response.json();
+                messagesList.innerHTML = '';
+                messages.forEach(msg => {
+                    const messageElement = document.createElement("div");
+                    messageElement.textContent = `${msg.sender}: ${msg.content}`;
+                    messageElement.className = "mb-2";
+                    messagesList.appendChild(messageElement);
+                });
+                messagesList.scrollTop = messagesList.scrollHeight;
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+
+        if (token) {
+            startSignalRConnection();
+        }
     </script>
 </body>
 </html>
